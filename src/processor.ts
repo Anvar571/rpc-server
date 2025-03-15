@@ -14,7 +14,30 @@ interface RPCResponse<R, E> {
     id: number | string | null;
 }
 
+interface RPCContext<T, R, E> {
+    req: IncomingMessage;
+    res: ServerResponse;
+    body: RPCRequest<T>;
+    methods: Map<string, (params: T) => Promise<unknown>>;
+    response?: RPCResponse<R, E>;
+}
+
 const methods: Map<string, (params: unknown) => Promise<unknown>> = new Map();
+
+async function compose<T, R, E>(
+    middlewares: ((ctx: RPCContext<T, R, E>, next: () => Promise<void>) => Promise<void>)[]
+) {
+    return async (ctx: RPCContext<T, R, E>) => {
+        let index = 0;
+        const next = async () => {
+            if (index < middlewares.length) {
+                const middleware = middlewares[index++];
+                if (middleware) middleware(ctx, next);
+            }
+        }
+        await next();
+    }
+}
 
 async function handleRequests(req: IncomingMessage, res: ServerResponse) {
     if (req.method !== 'POST') {
@@ -31,11 +54,12 @@ async function handleRequests(req: IncomingMessage, res: ServerResponse) {
             throw new Error("Method is not foud");
         }
 
-        const result = await handler(body.params);
+        const context: RPCContext<unknown, unknown, unknown> = {
+            req, res, body, methods
+        }
         
-        sendSerponse(res, { result });
     } catch (error) {
-        sendSerponse(res, {}, { error });
+        sendSerponse(res, { error });
     }
 }
 
@@ -59,15 +83,44 @@ async function getBody<T>(req: IncomingMessage): Promise<RPCRequest<T>> {
     })
 }
 
-function sendSerponse<R, E>(res: ServerResponse, data: R, error?: E) {
+function sendSerponse<R, E>(res: ServerResponse, data: { result?: R, error?: E }) {
     const responseData: RPCResponse<R, E> = {
         jsonrpc: '2.0',
-        result: data,
-        error,
+        result: data.result,
+        error: data.error,
         id: null
     };
     res.writeHead(200, { 'content-type': "application/json" });
     res.end(JSON.stringify(responseData));
+}
+
+async function validateRequest<T, R, E>(ctx: RPCContext<T, R, E>, next: () => Promise<void>) {
+    const { body } = ctx;
+    if (!body.method || typeof body.method !== "string") {
+        throw new Error("Invalid method name");
+    }
+    await next();
+}
+
+async function executeMethod<T, R, E>(ctx: RPCContext<T, R, E>, next: () => Promise<void>) {
+    const { body, methods } = ctx;
+    const method = methods.get(body.method) as (params: T) => Promise<R>;
+
+    if (!method) {
+        throw new Error("Method is not found");
+    }
+
+    ctx.response = {
+        jsonrpc: "2.0",
+        result: await method(body.params as T),
+        id: body.id,
+    };
+    await next();
+}
+
+async function sendResponse<T, R, E>(ctx: RPCContext<T, R, E>) {
+    ctx.res.writeHead(200, { "Content-Type": "application/json" });
+    ctx.res.end(JSON.stringify(ctx.response));
 }
 
 function createRPCServer() {
