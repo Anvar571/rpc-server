@@ -1,28 +1,30 @@
+import { RPCExceptions, ServerError } from "./exceptions";
 import { Processor } from "./processor";
-import { IMethod, IComposer } from "./types";
+import { IComposer, IMethod } from "./types";
 
 export class Composer extends Processor {
-    constructor({handlers, defines}: IComposer) {
+    constructor({ defines, handlers }: IComposer) {
         super(defines, handlers);
     }
 
-    public async onRequest(client, request) {
+    public async initRequest(client: any, body: any) {
+        let result, error;
+        
+        const method: IMethod = await this.getMethod(body.method);
+
         try {
-
-            var method: IMethod = await this.getMethod(request.method);
-
             if (this.handlers.init) {
-                await this.handlers.init.call(client, request, method);
+                await this.handlers.init.call(client, body, method);
             }
 
-            result = await method.operation.call(client, request.params);
+            result = await method.operation.call(client, body.params);
 
             if (this.handlers.resolve) {
-                await this.handlers.resolve.call(client, request, method, result);
+                await this.handlers.resolve.call(client, body, method, result);
             }
         }
         catch (err) {
-            if (err instanceof ModuleError) {
+            if (err instanceof RPCExceptions) {
                 error = err;
             }
             else {
@@ -30,19 +32,8 @@ export class Composer extends Processor {
             }
 
             if (this.handlers.reject) {
-                await this.handlers.reject.call(client, request, method, error);
+                await this.handlers.reject.call(client, body, method, error);
             }
-        }
-        finally {
-            return {
-                client: client,
-                response: {
-                    jsonrpc: "2.0",
-                    id: request.id,
-                    result: result || undefined,
-                    error: error || undefined,
-                }
-            };
         }
     }
 }

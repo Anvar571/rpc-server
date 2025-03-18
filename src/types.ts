@@ -9,6 +9,20 @@ export interface IMethod {
     operation: (params?: any) => Promise<any>;
 }
 
+export interface Handlers {
+    init?: (request: any, method: IMethod) => Promise<any>;
+    reject?: (request: any, method: IMethod, error: any) => Promise<any>;
+    resolve?: (request: any, method: IMethod, result: any) => Promise<any>;
+}
+
+export type JSON_RPC_VERTION = '2.0';
+
+export interface IRequest<P> {
+    jsonrpc: JSON_RPC_VERTION,
+    method: string,
+    params: P,
+}
+
 export interface Response {
     client: any;
     response: {
@@ -21,26 +35,22 @@ export interface Response {
 
 export interface IDefine {
     name: string;
-    modulename?: string;
-    [key: string]: IMethod | string | undefined;
+    [key: string]: IMethod | string;
 }
 
-export interface IComposerOption {}
+export interface IComposerOptions {}
 
-export interface PreparedMethods {
-    name: string,
-    props: PreparedMethods[]
-    modulename?: string,
+export interface IRPCServerOptions {
+    port?: number,
+    host?: string,
+    session?: {
+        status: boolean;
+        keyname: string;
+    }
 }
 
 export type IComposer = {
-    defines: [],
-    handlers: Handler[],
-    options?: IComposerOption
-}
-
-export interface Handlers<R, E> {
-    init?: (request: R, method: IMethod) => Promise<any>;
-    reject?: (request: R, method: IMethod, error: E) => Promise<any>;
-    resolve?: (request: R, method: IMethod, result: any) => Promise<any>;
+    defines: any[],
+    handlers: Handlers,
+    options?: IComposerOptions
 }
