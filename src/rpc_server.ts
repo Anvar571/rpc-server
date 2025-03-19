@@ -1,6 +1,6 @@
 import { IncomingMessage, ServerResponse, createServer, type Server } from "http";
 import { Composer } from "./composer";
-import { IRPCServerOptions } from "./types";
+import { IRPCServerOptions, IRequest } from "./types";
 import { AddressInfo } from "net";
 import { ParseErrorException } from "./exceptions";
 
@@ -14,17 +14,23 @@ export class RPCServer {
     }
 
     private async callbacks(req: IncomingMessage, res: ServerResponse) {
+        const body = await this.getBody(req);
+        const client = await this.prepareClient(req);
+
+        const result = await this.composer.initRequest(client, body);
+        
         try {
-            const body = await this.getBody(req);
-            const client = await this.prepareClient(req);
+            if (!body.jsonrpc || !body.method) {
+                throw ParseErrorException({ error: "Jsonrpc and method is required" });
+            }
 
-            const result = await this.composer.initRequest(client, body);
+            console.log(result, 'result');
 
-            this.sendSerponse({ status_code: 200, data: result }, res);
+            this.sendSerponse(result.client, { status_code: 200, data: result }, res);
         } catch (error) {
-            this.sendSerponse({ status_code: 504, data: error }, res);
+            this.sendSerponse(result.client, { status_code: 504, data: error }, res);
         }
-    } 
+    }
 
     private async initServer(server: Server): Promise<AddressInfo> {
         return new Promise((done, fail) => {
@@ -34,19 +40,19 @@ export class RPCServer {
         })
     }
 
-    private sendSerponse(result: { status_code: number, data: any }, res: ServerResponse) {
-        const newResult = JSON.stringify(result.data);
+    private sendSerponse<T>(client: any, result: { status_code: number, data: any }, res: ServerResponse) {
+        const response = JSON.stringify(result.data);
 
         const headers = {
             'Content-Type': 'application/json; charset=utf-8',
-            'Content-Length': newResult.length
+            'Content-Length': response.length
         };
 
         res.writeHead(result.status_code, headers);
-        res.end(newResult);
+        res.end(response);
     }
 
-    private async getBody(req: IncomingMessage) {
+    private async getBody<T>(req: IncomingMessage): Promise<IRequest<T>> {
         return new Promise((done, fail) => {
             let buffer: Buffer[]= [];
             req.on('data', (chunk) => {
