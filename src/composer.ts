@@ -1,4 +1,4 @@
-import { RPCExceptions, ServerError } from "./exceptions";
+import { InvalidParamException, ParseErrorException, RPCExceptions, ServerError } from "./exceptions";
 import { Processor } from "./processor";
 import { IComposer, IMethod } from "./types";
 
@@ -9,8 +9,15 @@ export class Composer extends Processor {
 
     public async initRequest(client: any, body: any) {
         let result, error;
-        
-        const method: IMethod = await this.getMethod(body.method);
+    
+        if (!body || !body.method) {
+            throw ParseErrorException("Invalid request: 'method' is required");
+        }
+
+        const method: IMethod | undefined = await this.getMethod(body.method);
+        if (!method || !method.operation) {
+            throw InvalidParamException(`Method not found: ${body.method}`);
+        }
 
         try {
             if (this.handlers.init) {
@@ -34,6 +41,16 @@ export class Composer extends Processor {
             if (this.handlers.reject) {
                 await this.handlers.reject.call(client, body, method, error);
             }
+        } finally {
+            return {
+                client: client,
+                response: {
+                    jsonrpc: "2.0",
+                    id: body.id,
+                    result: result || undefined,
+                    error: error || undefined,
+                }
+            };
         }
     }
 }
