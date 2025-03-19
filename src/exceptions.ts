@@ -1,29 +1,33 @@
 export interface IRPCExceptions {
-    message: string,
-    code: number,
-    data: any,
+    message: string;
+    code: number;
+    data?: any;
 }
 
 export class RPCExceptions extends Error {
-    private data: any;
-    private code: number;
-
-    constructor(options: IRPCExceptions) {
-        super(options.message);
-        this.message = options.message;
-        this.code = options.code;
-        this.data = options.data;
+    constructor(
+        public readonly code: number,
+        public readonly data: any = null,
+        message: string
+    ) {
+        super(message);
+        this.name = "RPCExceptions";
     }
-};
-
-export function InvalidParamException(data?: any) {
-    return new RPCExceptions({ code: 409, message: "Invalid params", data });
 }
 
-export function ParseErrorException(data?: any) {
-    return new RPCExceptions({ code: 410, message: "Parse error", data });
+export function createException(
+    code: number,
+    message: string,
+    data: any = null
+): RPCExceptions {
+    return new RPCExceptions(code, data, message);
 }
 
-export function ServerError(data?: any) {
-    return new RPCExceptions({ code: 501, message: "What is happened in server", data });
-}
+export const InvalidParamException = (data?: any) =>
+    createException(409, "Invalid params", data);
+
+export const ParseErrorException = (data?: any) =>
+    createException(410, "Parse error", data);
+
+export const ServerError = (data?: any) =>
+    createException(501, "What happened on the server", data);

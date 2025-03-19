@@ -2,7 +2,7 @@ import { IncomingMessage, ServerResponse, createServer, type Server } from "http
 import { Composer } from "./composer";
 import { IRPCServerOptions, IRequest } from "./types";
 import { AddressInfo } from "net";
-import { ParseErrorException } from "./exceptions";
+import { ParseErrorException, RPCExceptions } from "./exceptions";
 
 export class RPCServer {
     constructor(private options: IRPCServerOptions, private readonly composer: Composer) {}
@@ -10,25 +10,25 @@ export class RPCServer {
     public async init() {
         const server = createServer(this.callbacks.bind(this));
         const result = await this.initServer(server);
-        console.log(result, "reserver");
+        console.log(result, "RPC Server is running");
     }
 
     private async callbacks(req: IncomingMessage, res: ServerResponse) {
-        const body = await this.getBody(req);
-        const client = await this.prepareClient(req);
-
-        const result = await this.composer.initRequest(client, body);
+        let client = null;
         
         try {
-            if (!body.jsonrpc || !body.method) {
-                throw ParseErrorException({ error: "Jsonrpc and method is required" });
+            const body = await this.getBody(req);
+    
+            if (!body || !body.jsonrpc || !body.method) {
+                throw ParseErrorException({ message: "Jsonrpc and method is required" });
             }
-
-            console.log(result, 'result');
-
-            this.sendSerponse(result.client, { status_code: 200, data: result }, res);
+    
+            client = await this.prepareClient(req);
+    
+            const result = await this.composer.initRequest(client, body);
+            this.createSuccessResponse(client, res, result );
         } catch (error) {
-            this.sendSerponse(result.client, { status_code: 504, data: error }, res);
+            this.createErrorResponse(client, res, error );
         }
     }
 
@@ -40,15 +40,33 @@ export class RPCServer {
         })
     }
 
-    private sendSerponse<T>(client: any, result: { status_code: number, data: any }, res: ServerResponse) {
-        const response = JSON.stringify(result.data);
+    private createErrorResponse(client: any, res: ServerResponse, error: any) {
+        const response = JSON.stringify({
+            client,
+            response: {
+                jsonrpc: "2.0",
+                error: error,
+            }
+        });
 
         const headers = {
             'Content-Type': 'application/json; charset=utf-8',
             'Content-Length': response.length
         };
 
-        res.writeHead(result.status_code, headers);
+        res.writeHead(409, headers);
+        res.end(response);
+    }
+
+    private createSuccessResponse<T>(client: any, res: ServerResponse,  result: any) {
+        const response = JSON.stringify(result);
+
+        const headers = {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Content-Length': response.length
+        };
+
+        res.writeHead(201, headers);
         res.end(response);
     }
 

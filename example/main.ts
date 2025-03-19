@@ -1,6 +1,6 @@
 import { Composer } from "../src/composer";
 import { RPCServer } from "../src/rpc_server";
-import { IMethod } from "../src/types";
+import { IDefine, IMethod } from "../src/types";
 
 export class User {
     public name: string;
@@ -8,7 +8,7 @@ export class User {
         this.name = name;
     }
 
-    public static authorization: IMethod = {
+    public authorization: IMethod = {
         feature: {
             session: 'active'
         },
@@ -17,7 +17,7 @@ export class User {
         }
     };
 
-    public static registration: IMethod = {
+    public registration: IMethod = {
         feature: {
             session: 'active'
         },
@@ -26,25 +26,28 @@ export class User {
         }
     };
 
-    public static get_info: IMethod = {
+    public get_info: IMethod = {
         feature: {
             session: 'active'
         },
         operation: async function (params): Promise<any> {
-
+            console.log("user get info");
+            return "user get info"
         }
     }
 }
 
-const user = new User("asd");
-
-async function init(request: any, method: IMethod): Promise<any> {}
+async function init(request: any, method: IMethod): Promise<any> {
+    console.log(request, method);
+    
+    console.log("first init function");
+}
 async function resolve(request: any, method: IMethod): Promise<any> {}
 async function reject(request: any, method: IMethod): Promise<any> {}
 
 const composer = new Composer({
     defines: [
-        User
+        new User('user')
     ],
     handlers: {
         init,

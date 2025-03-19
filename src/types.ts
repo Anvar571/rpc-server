@@ -23,13 +23,13 @@ export interface IRequest<P> {
     params: P,
 }
 
-export interface Response {
+export interface IResponse {
     client: any;
     response: {
         jsonrpc: string;
         id: number | null;
-        error: any;
-        result: any;
+        error?: any;
+        result?: any;
     }
 }
 

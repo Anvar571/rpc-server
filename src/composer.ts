@@ -8,49 +8,64 @@ export class Composer extends Processor {
     }
 
     public async initRequest(client: any, body: any) {
-        let result, error;
-    
         if (!body || !body.method) {
-            throw ParseErrorException("Invalid request: 'method' is required");
+            return this.createErrorResponse(client, ParseErrorException("Invalid request: 'method' is required"), body);
         }
 
-        const method: IMethod | undefined = await this.getMethod(body.method);
+        const method: IMethod | undefined = this.getMethod(body.method);
+        
         if (!method || !method.operation) {
-            throw InvalidParamException(`Method not found: ${body.method}`);
+            return this.createErrorResponse(client, InvalidParamException(`Method not found: ${body.method}`), body);
         }
 
+        return this.processMethod(client, body, method);
+    }
+
+    private async processMethod(client: any, body: any, method: IMethod) {
         try {
             if (this.handlers.init) {
                 await this.handlers.init.call(client, body, method);
             }
 
-            result = await method.operation.call(client, body.params);
+            const result = await method.operation.call(client, body.params);
 
             if (this.handlers.resolve) {
                 await this.handlers.resolve.call(client, body, method, result);
             }
-        }
-        catch (err) {
-            if (err instanceof RPCExceptions) {
-                error = err;
-            }
-            else {
-                error = ServerError(err);
-            }
 
-            if (this.handlers.reject) {
-                await this.handlers.reject.call(client, body, method, error);
-            }
-        } finally {
-            return {
-                client: client,
-                response: {
-                    jsonrpc: "2.0",
-                    id: body.id,
-                    result: result || undefined,
-                    error: error || undefined,
-                }
-            };
+            return this.createSuccessResponse(client, result, body);
+        } catch (err) {
+            return this.createErrorResponse(client, err, body, method);
         }
+    }
+
+    private createSuccessResponse(client: any, result: any, body: any) {
+        return {
+            client,
+            response: {
+                jsonrpc: "2.0",
+                id: body.id,
+                result,
+                error: undefined,
+            },
+        };
+    }
+
+    private createErrorResponse(client: any, error: any, body: any, method?: IMethod) {
+        const rpcError = error instanceof RPCExceptions ? error : ServerError(error);
+
+        if (this.handlers.reject && method) {
+            this.handlers.reject.call(client, body, method, rpcError);
+        }
+
+        return {
+            client,
+            response: {
+                jsonrpc: "2.0",
+                id: body.id,
+                result: undefined,
+                error: rpcError,
+            },
+        };
     }
 }

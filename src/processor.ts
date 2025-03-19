@@ -1,3 +1,4 @@
+import { InvalidParamException } from "./exceptions";
 import { Handlers, IDefine, IMethod } from "./types";
 
 export class Processor {
@@ -13,27 +14,24 @@ export class Processor {
         return this._handlers;
     }
 
-    public getMethods() {
+    protected getMethods() {
         return this.preparedMethods;
     }
 
     private initDefines(defines: IDefine[]) {
         defines.forEach(define => {
-            const props: string[] = Object.getOwnPropertyNames(define);
             const moduleName = define.name.toLowerCase();
-
-            props.forEach(prop => {
-                const method: any = define[prop];
-
-                if (method.operation && method.operation.prototype === Function) {
+        
+            Object.entries(define).forEach(([prop, value]) => {
+                if (typeof value === 'object' && 'feature' in value && 'operation' in value) {
                     const moduleFullName = `${moduleName}.${prop}`;
-                    this.preparedMethods[moduleFullName] = method;
+                    this.preparedMethods[moduleFullName] = value;
                 }
-            })
+            });
         })
     }
 
-    protected async getMethod(key: string) {
+    protected getMethod(key: string) {
         return this.preparedMethods[key];
     }
 }
